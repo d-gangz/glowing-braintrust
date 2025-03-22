@@ -9,7 +9,7 @@ It uses the Braintrust API to invoke the prompts and dataset from the UI.
 I've also included description and metadata to help in the eval script.
 
 use this command to run the evaluation:
-braintrust eval eval_so.py
+braintrust eval eval_dataset.py
 """
 
 # Load environment variables from .env file
