@@ -10,13 +10,13 @@ load_dotenv()
 # This file defines the main function `generate_suggested_response` which orchestrates calls to Braintrust prompts
 # to generate a suggested response based on conversation history and other inputs.
 # It imports helper functions `value_extractor` and `rag_data` from `suggested_helper_functions.py` to provide necessary context.
+# Updated to be a generator function that yields streamed response chunks.
 # </ai_context>
 
 logger = init_logger(project="suggested-response")
 
 project_name = "suggested-response"
 
-@traced(type="task", metadata={"description": "Generate a suggested response based on conversation context and predefined guidelines."})
 def generate_suggested_response(
     salutation: str,
     last_name: str,
@@ -25,7 +25,7 @@ def generate_suggested_response(
     unit_open_issues_max_limit: str,
 ):
     """
-    Generates a suggested response based on conversation context and predefined guidelines.
+    Generates a suggested response based on conversation context and predefined guidelines, yielding chunks as they arrive.
 
     Args:
         salutation: The salutation for the guest (e.g., "Mr.", "Ms.").
@@ -34,8 +34,8 @@ def generate_suggested_response(
         current_date_time: The current date and time.
         unit_open_issues_max_limit: The time limit for open issues.
 
-    Returns:
-        A dictionary containing the generated suggested response.
+    Yields:
+        str: Chunks of the generated suggested response text.
     """
 
     extracted_values = value_extractor()
@@ -95,10 +95,14 @@ def generate_suggested_response(
             "unit_response_guidelines": extracted_values["unit_response_guidelines"],
             "unit_specific_information": extracted_values["unit_specific_information"],
             "unit_term": extracted_values["unit_term"]
-        }
+        },
+        stream=True
     )
 
-    return generated_response # Return the final generated response
+    # Yield each chunk's data as it arrives
+    for chunk in generated_response:
+        if chunk.data:
+            yield chunk.data # Yield the text data from the chunk
 
 # Example usage with dummy data
 if __name__ == "__main__":
@@ -127,37 +131,26 @@ if __name__ == "__main__":
         "unit_open_issues_max_limit": "4 hours"
     }
 
-    suggested_response_output = generate_suggested_response(
-        salutation=dummy_data["salutation"],
-        last_name=dummy_data["last_name"],
-        conversation=dummy_data["conversation"],
-        current_date_time=dummy_data["current_date_time"],
-        unit_open_issues_max_limit=dummy_data["unit_open_issues_max_limit"]
-    )
+    # Wrap the generator consumption in a traced function
+    @traced(type="task", name="suggested response stream", metadata={"description": "Generate a suggested response based on conversation context and predefined guidelines."})
+    def run_and_print_stream(data):
+        suggested_response_generator = generate_suggested_response(
+            salutation=data["salutation"],
+            last_name=data["last_name"],
+            conversation=data["conversation"],
+            current_date_time=data["current_date_time"],
+            unit_open_issues_max_limit=data["unit_open_issues_max_limit"]
+        )
 
-    print(suggested_response_output)
+        # Print the streamed output chunk by chunk as yielded by the generator
+        print("Streaming suggested response:")
+        full_response_for_log = ""
+        for chunk_data in suggested_response_generator: # Iterate over the generator
+            print(chunk_data, end="", flush=True) # Print each chunk without newline, flush immediately
+            full_response_for_log += chunk_data
+        print() # Print a final newline
+        # Return the full response so it's logged in the trace output
+        return {"final_streamed_output": full_response_for_log}
 
-# Delete original top-level prompt calls
-# import braintrust
-# from dotenv import load_dotenv
-# from braintrust import Eval, init_dataset, traced
-# // ... existing code ...
-# project_name = "suggested-response"
-#
-# # Prompt that generates a suggested response based on the input of type string.
-# generated_response = braintrust.invoke(
-# // ... existing code ...
-# )
-#
-# # Prompt that generates a response based on the input of type string.
-# open_issues_response = braintrust.invoke(
-# // ... existing code ...
-# )
-#
-# """
-# // ... existing code ...
-# }
-# """
-# language_selection_response = braintrust.invoke(
-# // ... existing code ...
-# )
+    # Execute the traced function
+    run_and_print_stream(dummy_data)
