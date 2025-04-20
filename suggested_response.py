@@ -11,6 +11,7 @@ load_dotenv()
 # to generate a suggested response based on conversation history and other inputs.
 # It imports helper functions `value_extractor` and `rag_data` from `suggested_helper_functions.py` to provide necessary context.
 # Updated to be a generator function that yields streamed response chunks.
+# Refactored `run_and_print_stream` to accept individual arguments for cleaner trace logging.
 # </ai_context>
 
 logger = init_logger(project="suggested-response")
@@ -133,13 +134,20 @@ if __name__ == "__main__":
 
     # Wrap the generator consumption in a traced function
     @traced(type="task", name="suggested response stream", metadata={"description": "Generate a suggested response based on conversation context and predefined guidelines."})
-    def run_and_print_stream(data):
+    def run_and_print_stream(
+        salutation: str,
+        last_name: str,
+        conversation: str,
+        current_date_time: str,
+        unit_open_issues_max_limit: str,
+    ):
+        """Runs the generation and prints the streamed output."""
         suggested_response_generator = generate_suggested_response(
-            salutation=data["salutation"],
-            last_name=data["last_name"],
-            conversation=data["conversation"],
-            current_date_time=data["current_date_time"],
-            unit_open_issues_max_limit=data["unit_open_issues_max_limit"]
+            salutation=salutation,
+            last_name=last_name,
+            conversation=conversation,
+            current_date_time=current_date_time,
+            unit_open_issues_max_limit=unit_open_issues_max_limit
         )
 
         # Print the streamed output chunk by chunk as yielded by the generator
@@ -150,7 +158,14 @@ if __name__ == "__main__":
             full_response_for_log += chunk_data
         print() # Print a final newline
         # Return the full response so it's logged in the trace output
-        return {"final_streamed_output": full_response_for_log}
+        # return {"final_streamed_output": full_response_for_log}
+        return full_response_for_log
 
     # Execute the traced function
-    run_and_print_stream(dummy_data)
+    run_and_print_stream(
+        salutation=dummy_data["salutation"],
+        last_name=dummy_data["last_name"],
+        conversation=dummy_data["conversation"],
+        current_date_time=dummy_data["current_date_time"],
+        unit_open_issues_max_limit=dummy_data["unit_open_issues_max_limit"]
+    )
